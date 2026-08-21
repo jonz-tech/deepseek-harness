@@ -93,6 +93,7 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
         .catch((error: unknown) => { deps.warn(`remote-access: 更新 lastUsedAt 失败: ${String(error)}`) })
       access.put(randomUUID(), {
         tokenId: matched.id, at: now, ip: clientIp(req), userAgent: req.headers['user-agent'] ?? '',
+        name: matched.record.name,
       } satisfies AccessRecord).catch((error: unknown) => { deps.warn(`remote-access: 写 access-log 失败: ${String(error)}`) })
     },
   })

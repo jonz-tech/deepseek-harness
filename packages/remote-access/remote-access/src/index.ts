@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-remote-access
  */
 
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
@@ -12,7 +12,6 @@ import { createRequestGate } from './gate.ts'
 import { registerLoginRoutes } from './login.ts'
 import { registerTokenCommand } from './command.ts'
 import { establishTunnel } from './tunnel.ts'
-import { generateToken, hashToken } from './hash.ts'
 
 export const name = 'remote-access'
 
@@ -74,22 +73,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     await ctx.credentials.set(secretRef, secret)
   }
 
-  // 3. 首次启动生成初始 token(仅经服务端日志显示一次)。
+  // 3. token 不再自动铸造:局域网(lanBypass)下用 `/token create` 按需创建;
+  //    若无任何 token 且 lanBypass 关闭,登录将不可用,须在可信环境先建 token。
   const tokens = domain.table('tokens')
-  if (tokens.size === 0) {
-    const initial = generateToken()
-    const id = randomUUID() as TokenId
-    await tokens.put(id, {
-      name: 'initial',
-      hash: hashToken(initial),
-      createdAt: Date.now(),
-      lastUsedAt: null,
-      revokedAt: null,
-    })
-    // console.log 直打(与 web-app 的 `dsh web:` URL 行同通道):ctx.logger.info
-    // 在产品 CLI 下被过滤,明文钥匙打在不可见通道等于丢失。
-    console.log(`remote-access: 初始访问 token(仅显示一次): ${initial}`)
-  }
 
   // 4. 注册闸门 + 登录路由 + /token 命令。
   ctx.effect(() => webServer.setRequestGate(createRequestGate({

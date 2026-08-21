@@ -19,12 +19,13 @@ export const tokenSchema = z.object({
   revokedAt: z.number().int().nonnegative().nullable(),
 })
 
-/** 访问日志记录:哪个 token、何时、哪台设备。 */
+/** 访问日志记录:哪个 token、何时、哪台设备。`name` 为可选以兼容历史记录(带 name 前)。 */
 export const accessSchema = z.object({
   tokenId: z.string().min(1),
   at: z.number().int().nonnegative(),
   ip: z.string(),
   userAgent: z.string(),
+  name: z.string().optional(),
 })
 
 export type TokenRecord = z.infer<typeof tokenSchema>

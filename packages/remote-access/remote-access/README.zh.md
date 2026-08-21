@@ -13,7 +13,7 @@
 - **请求闸门**。一个 webserver `RequestGate` 拒绝所有未携带有效且未过期会话 cookie 的请求:浏览器导航重定向到 `/auth/login`,API/升级请求返回 `401`。`/auth/login` 与 `/auth/logout` 保持公开。
 - **`/token` 命令**。`create` 生成 token 并把明文一次性打印到服务端日志;`list` 列出 token 及其吊销/最后使用状态;`revoke` 软删除 token,使其不再具备鉴权能力。
 
-会话密钥通过 `credentials` 服务按 `sessionSecretRef` 解析。首次启动时,插件会生成随机密钥并落盘,同时铸造一个仅在日志中打印一次的初始 token(之后无法恢复)。
+会话密钥通过 `credentials` 服务按 `sessionSecretRef` 解析。首次启动时,插件会生成随机密钥并落盘。不再自动铸造初始 token:请在可信(局域网免鉴权)会话里用 `/token create` 创建后再暴露隧道。
 
 ## Config
 

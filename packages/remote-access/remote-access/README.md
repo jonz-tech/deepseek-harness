@@ -13,7 +13,7 @@ The plugin mounts four services and wires them into the host plane:
 - **Request gate.** A webserver `RequestGate` rejects every request that does not carry a valid, unexpired session cookie, redirecting browser navigations to `/auth/login` and answering API/upgrade requests with `401`. `/auth/login` and `/auth/logout` stay public.
 - **`/token` command.** `create` mints a token and prints the plaintext once to the server log; `list` enumerates tokens with their revoke/last-used state; `revoke` soft-deletes a token so it no longer authenticates.
 
-The session secret is resolved through the `credentials` service under `sessionSecretRef`. On first boot the plugin generates a random secret and persists it, and mints an initial token logged once (never recoverable afterward).
+The session secret is resolved through the `credentials` service under `sessionSecretRef`. On first boot the plugin generates a random secret and persists it. No token is auto-minted: create one with `/token create` from a trusted (LAN-bypassed) session before exposing the tunnel.
 
 ## Config
 
