@@ -122,7 +122,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const running = provider.establish({ domain: config.domain, localPort: config.localPort })
     ctx.effect(() => {
       running
-        .then(({ url }) => { ctx.logger.info('remote-access: 公网地址 %s', url) })
+        .then(({ url }) => { console.log(`remote-access: 公网地址 ${url}`) })
         .catch((error: unknown) => { ctx.logger.warn('remote-access: 隧道建立失败: %s', String(error)) })
       return () => { void running.then(({ child }) => child.kill(), () => {}) }
     })

@@ -21,15 +21,14 @@ build() {
 }
 
 run() {
-  # 先杀掉占用端口的进程(忽略未占用的情形)
+  # 1) 杀掉占用 3080 端口的进程(LISTEN 者),温和终止后强制。
   local pids
   pids=$(lsof -ti :"$PORT" 2>/dev/null || true)
   if [ -n "$pids" ]; then
-    echo "==> 杀掉占用 ${PORT} 端口的进程: $pids"
+    echo "==> 杀掉占用 ${PORT} 的进程: $pids"
     # shellcheck disable=SC2086
     kill $pids 2>/dev/null || true
     sleep 1
-    # 仍未退出的强制杀
     pids=$(lsof -ti :"$PORT" 2>/dev/null || true)
     if [ -n "$pids" ]; then
       # shellcheck disable=SC2086
@@ -39,6 +38,23 @@ run() {
   else
     echo "==> 端口 ${PORT} 空闲"
   fi
+
+  # 2) 清残留的 dsh 启动进程与 cloudflared(被暂停/挂起、未占端口者 lsof 抓不到)。
+  local stale
+  stale=$(pgrep -f 'bin.ts --profile web' 2>/dev/null || true)
+  if [ -n "$stale" ]; then
+    echo "==> 清理残留 dsh 进程: $stale"
+    # shellcheck disable=SC2086
+    kill -9 $stale 2>/dev/null || true
+  fi
+  stale=$(pgrep -f 'cloudflared tunnel' 2>/dev/null || true)
+  if [ -n "$stale" ]; then
+    echo "==> 清理残留 cloudflared: $stale"
+    # shellcheck disable=SC2086
+    kill -9 $stale 2>/dev/null || true
+  fi
+  sleep 1
+
   echo "==> pnpm dsh --profile web"
   exec pnpm dsh --profile web
 }
