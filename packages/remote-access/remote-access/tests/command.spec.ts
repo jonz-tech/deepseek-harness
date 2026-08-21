@@ -17,6 +17,7 @@ function fakeDeps() {
         store.set(k, next)
         return next
       },
+      delete: async (k: string) => store.delete(k),
     }),
   } as never
   return { domain, store }
@@ -44,5 +45,20 @@ describe('token command', () => {
     const result = await cmd.handler({ rawInput: `revoke ${id}`, commandId: 'c' as never, agent: {} as never, attachments: [], signal: new AbortController().signal })
     expect(result.kind).toBe('success')
     expect(store.get(id)!.revokedAt).toBe(1000)
+  })
+
+  it('recreating with the same name overwrites the old record', async () => {
+    const { domain, store } = fakeDeps()
+    const cmd = registerTokenCommand({ domain, now: () => 1000, log: () => {} })
+    const invocation = (rawInput: string) => cmd.handler({ rawInput, commandId: 'c' as never, agent: {} as never, attachments: [], signal: new AbortController().signal })
+    await invocation('create z15pmx')
+    expect(store.size).toBe(1)
+    const firstHash = [...store.values()][0]!.hash
+    const result = await invocation('create z15pmx')
+    expect(result.kind).toBe('success')
+    expect((result as { text: string }).text).toContain('已覆盖同名')
+    // 旧的被删掉,只剩一条新记录,且哈希已更换(旧明文作废)。
+    expect(store.size).toBe(1)
+    expect([...store.values()][0]!.hash).not.toBe(firstHash)
   })
 })

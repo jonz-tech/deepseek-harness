@@ -46,9 +46,14 @@ export function registerTokenCommand(deps: TokenCommandDeps): CommandDefinition 
             revokedAt: null,
           }
           deps.log(`remote-access: 新 token(仅显示这一次): ${plain}`)
+          // 同名覆盖:删除同名旧记录,旧明文随之作废。
+          const staleIds = [...tokens.entries()]
+            .filter(([, rec]) => rec.name === name)
+            .map(([staleId]) => staleId)
+          await Promise.all(staleIds.map(staleId => tokens.delete(staleId)))
           return tokens.put(id, record).then(() => ({
             kind: 'success' as const,
-            text: `token 已创建(明文见服务端日志,仅显示一次)\nid: ${id}\n名称: ${name}`,
+            text: `token 已创建(明文见服务端日志,仅显示一次)\nid: ${id}\n名称: ${name}${staleIds.length > 0 ? '\n(已覆盖同名的旧 token,旧明文作废)' : ''}`,
           }))
         }
         case 'list': {
