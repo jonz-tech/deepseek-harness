@@ -258,7 +258,8 @@ export class WebServer extends Service {
         dispatch()
         return
       }
-      Promise.resolve().then(() => this.requestGate(req)).then((gate) => {
+      const requestGate = this.requestGate
+      Promise.resolve().then(() => requestGate(req)).then((gate) => {
         if (!gate.allowed) {
           socket.destroy()
           return
