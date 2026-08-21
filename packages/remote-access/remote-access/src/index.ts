@@ -7,7 +7,6 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import { remoteAccessDomain, type TokenId } from './domain.ts'
 import { createRequestGate } from './gate.ts'
 import { registerLoginRoutes } from './login.ts'
@@ -55,7 +54,7 @@ export const Config: z<Config> = z.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   if (!config.enabled) return
-  const webServer = ctx.webServer as WebServer
+  const webServer = ctx.webServer
 
   // 1. 打开领域;释放时关闭。
   const domain = await ctx.storageDomain.open(remoteAccessDomain)

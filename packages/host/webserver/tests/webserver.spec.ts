@@ -241,7 +241,7 @@ describe('real Loader composition', () => {
     })
     expect(await request(port, '/public')).toMatchObject({ status: 200, body: 'OK' })
     expect((await request(port, '/secret')).status).toBe(401)
-    const redirect = await request(port, '/somewhere', { redirect: 'manual' } as RequestInit)
+    const redirect = await request(port, '/somewhere', { redirect: 'manual' })
     expect(redirect.status).toBe(302)
     expect(redirect.headers.get('location')).toBe('/auth/login')
 

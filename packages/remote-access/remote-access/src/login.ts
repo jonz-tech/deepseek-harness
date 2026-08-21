@@ -75,10 +75,10 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
       res.end()
       // 访问日志 + 最后使用时间(异步落地,不阻塞响应)。
       tokens.update(matched.id, rec => ({ ...rec, lastUsedAt: now }))
-        .catch((error: unknown) => deps.warn(`remote-access: 更新 lastUsedAt 失败: ${String(error)}`))
+        .catch((error: unknown) => { deps.warn(`remote-access: 更新 lastUsedAt 失败: ${String(error)}`) })
       access.put(randomUUID(), {
         tokenId: matched.id, at: now, ip: clientIp(req), userAgent: req.headers['user-agent'] ?? '',
-      } satisfies AccessRecord).catch((error: unknown) => deps.warn(`remote-access: 写 access-log 失败: ${String(error)}`))
+      } satisfies AccessRecord).catch((error: unknown) => { deps.warn(`remote-access: 写 access-log 失败: ${String(error)}`) })
     },
   })
 

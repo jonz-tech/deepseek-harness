@@ -44,11 +44,11 @@ afterEach(async () => {
  */
 function captureInitialToken(ctx: Context): void {
   const info = ctx.logger.info.bind(ctx.logger)
-  ;(ctx.logger as unknown as { info: (...args: unknown[]) => unknown }).info = ((...args: unknown[]) => {
-    if (typeof args[0] === 'string' && (args[0] as string).includes('初始访问 token')) {
+  ctx.logger.info = ((...args: unknown[]) => {
+    if (typeof args[0] === 'string' && args[0].includes('初始访问 token')) {
       mintedToken = String(args[1])
     }
-    return info(...args)
+    return (info as (...a: unknown[]) => unknown)(...args)
   })
 }
 
@@ -132,7 +132,7 @@ describe('real Loader composition: remote-access login gate', () => {
   it('redirects, serves the login form, rejects a wrong token, and accepts the minted token', { timeout: 60_000 }, async () => {
     const loaded = await loadComposition()
     expect(mintedToken).toBeDefined()
-    const port = (loaded.webServer as WebServer).port
+    const port = loaded.webServer.port
     expect(port).toBeGreaterThan(0)
 
     // 1. 未登录访问非公开路径 → 302 到 /auth/login。

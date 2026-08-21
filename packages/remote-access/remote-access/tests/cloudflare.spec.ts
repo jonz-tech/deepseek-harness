@@ -5,13 +5,12 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('cloudflare client', () => {
   it('resolves zone then creates tunnel and CNAME', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = []
-    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-      calls.push({ url: String(url), init })
-      const u = String(url)
-      if (u.includes('/zones?')) return new Response(JSON.stringify({ result: [{ id: 'z1', name: 'home.example.com', account: { id: 'a1' } }] }), { status: 200 })
-      if (u.includes('/cfd_tunnel')) return new Response(JSON.stringify({ result: { id: 't1', token: 'tok' } }), { status: 200 })
-      if (u.includes('/dns_records')) return new Response(JSON.stringify({ result: {} }), { status: 200 })
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = []
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      if (url.includes('/zones?')) return new Response(JSON.stringify({ result: [{ id: 'z1', name: 'home.example.com', account: { id: 'a1' } }] }), { status: 200 })
+      if (url.includes('/cfd_tunnel')) return new Response(JSON.stringify({ result: { id: 't1', token: 'tok' } }), { status: 200 })
+      if (url.includes('/dns_records')) return new Response(JSON.stringify({ result: {} }), { status: 200 })
       return new Response('{}', { status: 404 })
     })
     vi.stubGlobal('fetch', fetchMock)

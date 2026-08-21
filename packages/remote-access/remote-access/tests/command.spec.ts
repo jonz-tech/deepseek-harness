@@ -30,9 +30,10 @@ describe('token command', () => {
     const result = await cmd.handler({ rawInput: 'create --name 家里', commandId: 'c' as never, agent: {} as never, signal: new AbortController().signal })
     expect(result.kind).toBe('success')
     const [rec] = store.values()
-    expect(rec.hash).not.toContain(logged[0])
-    expect(verifyToken(logged[0].split(': ')[2]!, rec.hash)).toBe(true)
-    expect((result as { text: string }).text).not.toContain(logged[0])
+    expect(rec).toBeDefined()
+    expect(rec!.hash).not.toContain(logged[0]!)
+    expect(verifyToken(logged[0]!.split(': ')[2]!, rec!.hash)).toBe(true)
+    expect((result as { text: string }).text).not.toContain(logged[0]!)
   })
 
   it('revokes by id', async () => {

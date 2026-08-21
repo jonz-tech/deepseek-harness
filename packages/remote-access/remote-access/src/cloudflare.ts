@@ -25,13 +25,13 @@ export class CloudflareError extends Error {
  * 一个带 Bearer token 的最小 fetch 封装;非 2xx 抛 {@link CloudflareError}。
  * @param token - Cloudflare API token。
  * @param path - API 路径(以 `/` 开头,相对 {@link API_BASE})。
- * @param init - 追加到 fetch 的请求选项;header 会合并到 Authorization/Content-Type。
+ * @param init - 追加到 fetch 的请求选项(header 固定为 Bearer + JSON)。
  * @returns 解析后的 JSON 响应体;空响应体返回 undefined。
  */
 async function cfFetch(token: string, path: string, init: RequestInit = {}): Promise<unknown> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   })
   const text = await res.text()
   if (!res.ok) {
