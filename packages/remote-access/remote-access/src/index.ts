@@ -3,8 +3,17 @@
  * @module @deepseek-ai/dsh-remote-access
  */
 
+import { randomBytes, randomUUID } from 'node:crypto'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
+import { remoteAccessDomain, type TokenId } from './domain.ts'
+import { createRequestGate } from './gate.ts'
+import { registerLoginRoutes } from './login.ts'
+import { registerTokenCommand } from './command.ts'
+import { establishTunnel } from './tunnel.ts'
+import { generateToken, hashToken } from './hash.ts'
 
 export const name = 'remote-access'
 
@@ -44,7 +53,67 @@ export const Config: z<Config> = z.object({
  * @param config - 已验证配置。
  * @returns 装配完成(领域打开、路由/闸门/命令注册、隧道启动)后 resolve。
  */
-export function apply(_ctx: Context, _config: Config): Promise<void> {
-  // 鉴权/隧道装配在 Task 9 填充;此处为骨架。
-  return Promise.resolve()
+export async function apply(ctx: Context, config: Config): Promise<void> {
+  if (!config.enabled) return
+  const webServer = ctx.webServer as WebServer
+
+  // 1. 打开领域;释放时关闭。
+  const domain = await ctx.storageDomain.open(remoteAccessDomain)
+  ctx.effect(() => () => { void domain.close() })
+
+  // 2. 解析/生成会话密钥;缺失则生成并落盘。
+  const secretRef = credentialRef(config.sessionSecretRef)
+  const resolved = await ctx.credentials.resolve(secretRef)
+  let secret: string
+  if (resolved !== undefined) {
+    secret = resolved.value
+  } else {
+    secret = randomBytes(32).toString('base64')
+    await ctx.credentials.set(secretRef, secret)
+  }
+
+  // 3. 首次启动生成初始 token(仅经服务端日志显示一次)。
+  const tokens = domain.table('tokens')
+  if (tokens.size === 0) {
+    const initial = generateToken()
+    const id = randomUUID() as TokenId
+    await tokens.put(id, {
+      name: 'initial',
+      hash: hashToken(initial),
+      createdAt: Date.now(),
+      lastUsedAt: null,
+      revokedAt: null,
+    })
+    ctx.logger.info('remote-access: 初始访问 token(仅显示一次): %s', initial)
+  }
+
+  // 4. 注册闸门 + 登录路由 + /token 命令。
+  ctx.effect(() => webServer.setRequestGate(createRequestGate({
+    secret, cookieName: config.cookieName, now: Date.now,
+  })))
+  ctx.effect(() => registerLoginRoutes(webServer, {
+    domain, secret, cookieName: config.cookieName, sessionTtlMs: config.sessionTtlMs, now: Date.now,
+    warn: (message) => { ctx.logger.warn('%s', message) },
+  }))
+  ctx.effect(() => ctx.commands.register(registerTokenCommand({
+    domain, now: Date.now, log: (message) => { ctx.logger.info('%s', message) },
+  })))
+
+  // 5. 隧道(可选):domain 非空且凭证存在时启动,释放时结束子进程。
+  if (config.domain !== '') {
+    const apiToken = await ctx.credentials.resolve(credentialRef(config.cloudflareApiTokenRef))
+    if (apiToken === undefined) {
+      ctx.logger.warn('remote-access: 未配置 %s,跳过隧道', config.cloudflareApiTokenRef)
+      return
+    }
+    ctx.effect(() => {
+      const running = establishTunnel({
+        apiToken: apiToken.value, domain: config.domain, localPort: config.localPort, now: Date.now,
+      })
+      running
+        .then(({ url }) => { ctx.logger.info('remote-access: 公网地址 %s', url) })
+        .catch((error: unknown) => { ctx.logger.warn('remote-access: 隧道建立失败: %s', String(error)) })
+      return () => { void running.then(({ child }) => child.kill(), () => {}) }
+    })
+  }
 }

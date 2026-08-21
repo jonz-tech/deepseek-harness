@@ -31,7 +31,7 @@ export type TokenRecord = z.infer<typeof tokenSchema>
 export type AccessRecord = z.infer<typeof accessSchema>
 
 export const remoteAccessDomain = defineDomain({
-  name: 'remote-access',
+  name: 'remote_access',
   version: 0,
   tables: {
     tokens: domainTable<TokenId, TokenRecord>(tokenSchema),
