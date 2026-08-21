@@ -56,9 +56,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   if (!config.enabled) return
   const webServer = ctx.webServer
 
-  // 1. 打开领域;释放时关闭。
+  // 1. 打开领域;释放时关闭(失败记录,不留 unhandled rejection)。
   const domain = await ctx.storageDomain.open(remoteAccessDomain)
-  ctx.effect(() => () => { void domain.close() })
+  ctx.effect(() => () => { domain.close().catch((error: unknown) => { ctx.logger.warn('remote-access: 关闭领域失败: %s', String(error)) }) })
 
   // 2. 解析/生成会话密钥;缺失则生成并落盘。
   const secretRef = credentialRef(config.sessionSecretRef)
@@ -89,6 +89,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // 4. 注册闸门 + 登录路由 + /token 命令。
   ctx.effect(() => webServer.setRequestGate(createRequestGate({
     secret, cookieName: config.cookieName, now: Date.now,
+    isRevoked: (tokenId, issuedAt) => {
+      const rec = tokens.get(tokenId as TokenId)
+      return rec !== undefined && rec.revokedAt !== null && rec.revokedAt > issuedAt
+    },
   })))
   ctx.effect(() => registerLoginRoutes(webServer, {
     domain, secret, cookieName: config.cookieName, sessionTtlMs: config.sessionTtlMs, now: Date.now,

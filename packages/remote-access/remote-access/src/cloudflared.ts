@@ -72,8 +72,10 @@ async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    // 仅 ENOENT 表示"不存在";其余错误(如 EACCES)需向上抛,不能静默当不存在。
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
   }
 }
 

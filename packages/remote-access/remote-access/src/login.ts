@@ -25,10 +25,18 @@ export interface LoginDeps {
   warn: (message: string) => void
 }
 
+/** 登录 POST 请求体字节上限(公开、pre-gate 端点,防 DoS)。 */
+const MAX_BODY_BYTES = 8192
+
 /** 从请求体读取 URL 编码的 `token` 字段。 */
 async function readBody(req: IncomingMessage): Promise<string> {
   let raw = ''
-  for await (const chunk of req) raw += String(chunk)
+  for await (const chunk of req) {
+    raw += String(chunk)
+    if (raw.length > MAX_BODY_BYTES) {
+      throw new Error(`请求体超过 ${MAX_BODY_BYTES} 字节上限`)
+    }
+  }
   return new URLSearchParams(raw).get('token') ?? ''
 }
 
@@ -57,7 +65,14 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
         return
       }
       if (req.method !== 'POST') { res.writeHead(405); res.end(); return }
-      const plain = await readBody(req)
+      let plain: string
+      try {
+        plain = await readBody(req)
+      } catch (error) {
+        // 请求体超限返回 413;其余读取错误保持响亮(冒泡为 500)。
+        if (error instanceof Error && error.message.includes('上限')) { res.writeHead(413); res.end(); return }
+        throw error
+      }
       // 逐个校验非吊销 token。
       let matched: { id: TokenId; record: TokenRecord } | undefined
       for (const [id, record] of tokens.entries()) {
@@ -66,7 +81,7 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
       }
       if (matched === undefined) { res.writeHead(401); res.end('unauthorized'); return }
       const now = deps.now()
-      const session = { sid: randomUUID(), issuedAt: now, expiresAt: now + deps.sessionTtlMs }
+      const session = { sid: randomUUID(), tokenId: matched.id, issuedAt: now, expiresAt: now + deps.sessionTtlMs }
       const cookie = signSession(deps.secret, session)
       res.writeHead(302, {
         'Set-Cookie': `${deps.cookieName}=${cookie}; HttpOnly; Secure; Path=/; Max-Age=${Math.floor(deps.sessionTtlMs / 1000)}`,

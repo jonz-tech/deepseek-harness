@@ -13,8 +13,8 @@ function req(path: string, cookie?: string, upgrade = false): Parameters<ReturnT
 
 describe('request gate', () => {
   const secret = 'secret'
-  const gate = createRequestGate({ secret, cookieName: 'dsh', now: () => 5000 })
-  const validCookie = signSession(secret, { sid: 's', issuedAt: 1000, expiresAt: 9999 })
+  const gate = createRequestGate({ secret, cookieName: 'dsh', now: () => 5000, isRevoked: () => false })
+  const validCookie = signSession(secret, { sid: 's', tokenId: 't', issuedAt: 1000, expiresAt: 9999 })
 
   // 闸门在此是同步函数;把返回收窄为同步结果,便于断言(类型上 RequestGate 允许 Promise)。
   const run = (path: string, cookie?: string, upgrade?: boolean): RequestGateResult =>
@@ -32,7 +32,14 @@ describe('request gate', () => {
   })
 
   it('blocks expired sessions', () => {
-    const expired = signSession(secret, { sid: 's', issuedAt: 1000, expiresAt: 2000 })
+    const expired = signSession(secret, { sid: 's', tokenId: 't', issuedAt: 1000, expiresAt: 2000 })
     expect(run('/app', expired)).toEqual({ allowed: false, location: '/auth/login' })
+  })
+
+  it('blocks a valid-signed, non-expired session whose token was revoked after issue', () => {
+    const revokedGate = createRequestGate({ secret, cookieName: 'dsh', now: () => 5000, isRevoked: () => true })
+    const revokedRun = (path: string, cookie?: string, upgrade?: boolean): RequestGateResult =>
+      revokedGate(req(path, cookie, upgrade)) as RequestGateResult
+    expect(revokedRun('/app', validCookie)).toEqual({ allowed: false, location: '/auth/login' })
   })
 })

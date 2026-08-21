@@ -14,6 +14,8 @@ export interface GateDeps {
   secret: string
   cookieName: string
   now: () => number
+  /** 判断某 token 是否在会话签发后被吊销(返回 true 则拒绝会话)。 */
+  isRevoked: (tokenId: string, issuedAt: number) => boolean
 }
 
 /** 从请求 cookie 里解析会话;有效则放行。 */
@@ -23,7 +25,7 @@ export function createRequestGate(deps: GateDeps): RequestGate {
     if (PUBLIC_PATHS.includes(path)) return { allowed: true }
     const cookie = readCookie(req, deps.cookieName)
     const session = cookie === undefined ? undefined : verifySession(deps.secret, cookie)
-    if (session !== undefined && !sessionExpired(session, deps.now())) {
+    if (session !== undefined && !sessionExpired(session, deps.now()) && !deps.isRevoked(session.tokenId, session.issuedAt)) {
       return { allowed: true }
     }
     const isUpgrade = (req.headers.upgrade ?? '').length > 0

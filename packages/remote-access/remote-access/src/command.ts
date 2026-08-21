@@ -30,7 +30,9 @@ export function registerTokenCommand(deps: TokenCommandDeps): CommandDefinition 
       const [verb, ...rest] = invocation.rawInput.trim().split(/\s+/)
       switch (verb) {
         case 'create': {
-          const name = rest.join(' ') || 'unnamed'
+          // 剥离字面 `--name` 前缀(否则会作为名称文本残留)。
+          const args = rest.filter(a => a !== '--name')
+          const name = args.join(' ') || 'unnamed'
           const id = randomUUID() as TokenId
           const plain = generateToken()
           const record: TokenRecord = {

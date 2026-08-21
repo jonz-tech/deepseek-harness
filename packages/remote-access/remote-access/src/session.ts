@@ -9,6 +9,8 @@ import type { IncomingMessage } from 'node:http'
 /** 会话载荷。 */
 export interface Session {
   sid: string
+  /** 签发会话时所用的 token id(用于吊销后失效)。 */
+  tokenId: string
   issuedAt: number
   expiresAt: number
 }
