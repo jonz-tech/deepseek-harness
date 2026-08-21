@@ -11,7 +11,9 @@ import { remoteAccessDomain, type TokenId } from './domain.ts'
 import { createRequestGate } from './gate.ts'
 import { registerLoginRoutes } from './login.ts'
 import { registerTokenCommand } from './command.ts'
-import { establishTunnel } from './tunnel.ts'
+import { TunnelRegistry } from './tunnel/provider.ts'
+import { TokenTunnelProvider } from './tunnel/token-provider.ts'
+import { ApiTunnelProvider } from './tunnel/api-provider.ts'
 
 export const name = 'remote-access'
 
@@ -29,8 +31,12 @@ export interface Config {
   domain: string
   /** 本地 dsh 端口(隧道回源目标)。 */
   localPort: number
-  /** Cloudflare API token 在 credentials 中的引用名。 */
+  /** `api` 模式:Cloudflare API token 在 credentials 中的引用名。 */
   cloudflareApiTokenRef: string
+  /** `token` 模式:云端托管隧道的 run token 在 credentials 中的引用名。 */
+  tunnelTokenRef: string
+  /** 隧道 provider 名:`token`(复用已有隧道)或 `api`(API 自动建隧道)。 */
+  tunnelProvider: 'token' | 'api'
   /** 总开关;false 时不注册任何路由/闸门/命令。 */
   enabled: boolean
   /** 局域网直连免鉴权(私网来源且无 Cloudflare 隧道头时放行;隧道流量始终鉴权)。 */
@@ -44,6 +50,8 @@ export const Config: z<Config> = z.object({
   domain: z.string().default(''),
   localPort: z.natural().max(65535).default(3080),
   cloudflareApiTokenRef: z.string().default('CLOUDFLARE_API_TOKEN'),
+  tunnelTokenRef: z.string().default('CLOUDFLARE_TUNNEL_TOKEN'),
+  tunnelProvider: z.union([z.const('token'), z.const('api')]).default('token'),
   enabled: z.boolean().default(true),
   lanBypass: z.boolean().default(false),
 })
@@ -93,17 +101,26 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     domain, now: Date.now, log: (message) => { console.log(message) },
   })))
 
-  // 5. 隧道(可选):domain 非空且凭证存在时启动,释放时结束子进程。
+  // 5. 隧道(可选):domain 非空时按所选 provider 启动,释放时结束子进程。
   if (config.domain !== '') {
-    const apiToken = await ctx.credentials.resolve(credentialRef(config.cloudflareApiTokenRef))
-    if (apiToken === undefined) {
-      ctx.logger.warn('remote-access: 未配置 %s,跳过隧道', config.cloudflareApiTokenRef)
+    // 按配置解析所选 provider 需要的凭证。
+    const ref = config.tunnelProvider === 'token'
+      ? config.tunnelTokenRef
+      : config.cloudflareApiTokenRef
+    const credential = await ctx.credentials.resolve(credentialRef(ref))
+    if (credential === undefined) {
+      ctx.logger.warn('remote-access: 未配置 %s,跳过隧道', ref)
       return
     }
+    // 构造对应 provider,注册进注册表,并以其建立隧道。
+    const registry = new TunnelRegistry()
+    ctx.provide('tunnel', registry)
+    const provider = config.tunnelProvider === 'token'
+      ? new TokenTunnelProvider(ctx, credential.value)
+      : new ApiTunnelProvider(ctx, credential.value)
+    ctx.effect(() => registry.register(config.tunnelProvider, provider))
+    const running = provider.establish({ domain: config.domain, localPort: config.localPort })
     ctx.effect(() => {
-      const running = establishTunnel({
-        apiToken: apiToken.value, domain: config.domain, localPort: config.localPort, now: Date.now,
-      })
       running
         .then(({ url }) => { ctx.logger.info('remote-access: 公网地址 %s', url) })
         .catch((error: unknown) => { ctx.logger.warn('remote-access: 隧道建立失败: %s', String(error)) })

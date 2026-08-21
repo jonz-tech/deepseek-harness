@@ -24,7 +24,9 @@ The session secret is resolved through the `credentials` service under `sessionS
 | `sessionSecretRef` | (required) | Credential reference holding the HMAC session secret. |
 | `domain` | `''` | Public hostname for the tunnel; empty disables tunneling. |
 | `localPort` | `3080` | Local dsh port the tunnel forwards to. |
-| `cloudflareApiTokenRef` | `CLOUDFLARE_API_TOKEN` | Credential reference for the Cloudflare API token. |
+| `cloudflareApiTokenRef` | `CLOUDFLARE_API_TOKEN` | Credential reference for the Cloudflare API token (`api` provider). |
+| `tunnelTokenRef` | `CLOUDFLARE_TUNNEL_TOKEN` | Credential reference for a cloud-managed tunnel's run token (`token` provider). |
+| `tunnelProvider` | `token` | Tunnel provider: `token` reuses an existing cloud-managed tunnel + dashboard route; `api` auto-creates a tunnel and DNS via the Cloudflare API. |
 | `enabled` | `true` | Master switch; `false` registers no routes, gate, or command. |
 | `lanBypass` | `false` | Skip auth for trusted direct LAN/loopback requests (private source and no Cloudflare edge headers); tunnel traffic always requires auth. |
 
@@ -36,9 +38,12 @@ The web-app bundle mounts the plugin with a one-month `sessionTtlMs`, `cookieNam
 
 ## Enabling the tunnel
 
-1. Set the Cloudflare API token under the credential reference named by `cloudflareApiTokenRef`.
-2. Set `domain` to the public hostname (for example `home.example.com`) that the tunnel should expose.
-3. Restart the app. The plugin resolves the token, creates the tunnel through the Cloudflare API, downloads/launches `cloudflared` under `$DSH_HOME/cloudflared`, and logs the public URL once established.
+**`token` provider (default; reuses an existing cloud-managed tunnel):**
+1. Create a tunnel and its Public Hostname route in the Cloudflare dashboard (`homedsh.example.com` -> `http://localhost:<port>`).
+2. Set the tunnel's run token (`cloudflared tunnel run --token ...`) under `tunnelTokenRef` (`CLOUDFLARE_TUNNEL_TOKEN`).
+3. Set `domain` to that public hostname. Restart: the plugin downloads/launches `cloudflared` under `$DSH_HOME/cloudflared` and connects the existing tunnel; no API token needed.
+
+**`api` provider (auto-create):** set `tunnelProvider: 'api'`, put a Cloudflare API token (Account/Cloudflare-Tunnel Edit + Zone/DNS Edit) under `cloudflareApiTokenRef`, and set `domain`. The plugin then creates the tunnel and DNS via the API on each boot and logs the public URL.
 
 ## Multi-machine deployment
 

@@ -79,33 +79,48 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+/** 可选的本地 ingress 配置:仅 `api` 模式(自动建隧道)需要,`token` 模式复用 dashboard 路由。 */
+export interface CloudflaredIngress {
+  /** 回源公网域名。 */
+  domain: string
+  /** 本地回源端口。 */
+  localPort: number
+  /** 存放生成配置的目录。 */
+  configDir: string
+}
+
 /**
- * 生成 ingress 配置并启动 cloudflared 子进程。
+ * 启动 cloudflared 子进程,用隧道 run token 连接 Cloudflare 边缘。
+ *
+ * - `ingress` 缺省:云端托管隧道(dashboard 已配好 Public Hostname 路由),
+ *   cloudflared 仅建立连接,无需本地配置。
+ * - `ingress` 提供:`api` 模式自动建的隧道,需本地写 ingress 配置并 `--config`。
  * @param binary - cloudflared 二进制路径。
- * @param tunnelToken - Cloudflare 隧道连接 token。
- * @param domain - 回源公网域名。
- * @param localPort - 本地回源端口。
- * @param configDir - 存放生成配置的目录。
+ * @param tunnelToken - 隧道连接 token(`cloudflared tunnel run --token`)。
+ * @param ingress - 可选本地 ingress;缺省时不写配置。
  * @returns 已启动的 cloudflared 子进程。
  */
 export async function runCloudflared(
   binary: string,
   tunnelToken: string,
-  domain: string,
-  localPort: number,
-  configDir: string,
+  ingress?: CloudflaredIngress,
 ): Promise<ChildProcess> {
-  await mkdir(configDir, { recursive: true })
-  const configPath = join(configDir, 'config.yml')
-  await writeFile(configPath, [
-    'ingress:',
-    `  - hostname: ${domain}`,
-    `    service: http://127.0.0.1:${String(localPort)}`,
-    '  - service: http_status:404',
-    '',
-  ].join('\n'))
-  const child = spawn(binary, ['tunnel', '--no-autoupdate', 'run', '--token', tunnelToken, '--config', configPath], {
-    stdio: ['ignore', 'ignore', 'ignore'],
-  })
+  const args = ['tunnel', '--no-autoupdate', 'run', '--token', tunnelToken]
+  if (ingress !== undefined) {
+    await mkdir(ingress.configDir, { recursive: true })
+    const configPath = join(ingress.configDir, 'config.yml')
+    await writeFile(configPath, [
+      'ingress:',
+      `  - hostname: ${ingress.domain}`,
+      `    service: http://127.0.0.1:${String(ingress.localPort)}`,
+      '  - service: http_status:404',
+      '',
+    ].join('\n'))
+    args.push('--config', configPath)
+  }
+  // 消费子进程输出以释放管道,避免背压阻塞;stdout/stderr 均不阻塞。
+  const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+  child.stdout.on('data', () => {})
+  child.stderr.on('data', () => {})
   return child
 }

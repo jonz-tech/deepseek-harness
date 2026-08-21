@@ -133,9 +133,11 @@
         sessionTtlMs: 2592000000
         cookieName: dsh_session
         sessionSecretRef: REMOTE_ACCESS_SESSION_SECRET
-        domain: ''
+        domain: 'homedsh.sideproject.top'
         localPort: 3080
         cloudflareApiTokenRef: CLOUDFLARE_API_TOKEN
+        tunnelTokenRef: CLOUDFLARE_TUNNEL_TOKEN
+        tunnelProvider: 'token'
         enabled: true
         lanBypass: true
 

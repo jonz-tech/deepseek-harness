@@ -24,7 +24,9 @@
 | `sessionSecretRef` | (必填) | 持有 HMAC 会话密钥的 credential 引用名。 |
 | `domain` | `''` | 隧道公网主机名;为空则禁用隧道。 |
 | `localPort` | `3080` | 隧道回源的本机 dsh 端口。 |
-| `cloudflareApiTokenRef` | `CLOUDFLARE_API_TOKEN` | Cloudflare API token 的 credential 引用名。 |
+| `cloudflareApiTokenRef` | `CLOUDFLARE_API_TOKEN` | Cloudflare API token 的 credential 引用名(`api` provider)。 |
+| `tunnelTokenRef` | `CLOUDFLARE_TUNNEL_TOKEN` | 云端托管隧道 run token 的 credential 引用名(`token` provider)。 |
+| `tunnelProvider` | `token` | 隧道 provider:`token` 复用已有云端托管隧道 + dashboard 路由;`api` 通过 Cloudflare API 自动建隧道与 DNS。 |
 | `enabled` | `true` | 总开关;为 `false` 时不注册任何路由/闸门/命令。 |
 | `lanBypass` | `false` | 局域网/本机直连免鉴权(来源为私网地址且无 Cloudflare 边缘头);隧道流量始终要求鉴权。 |
 
@@ -36,9 +38,12 @@ web-app bundle 以一个月 `sessionTtlMs`、`cookieName: dsh_session`、`domain
 
 ## 开启隧道
 
-1. 在 `cloudflareApiTokenRef` 所指的 credential 引用下配置 Cloudflare API token。
-2. 将 `domain` 设为隧道要暴露的公网主机名(例如 `home.example.com`)。
-3. 重启应用。插件解析 token、通过 Cloudflare API 创建隧道、在 `$DSH_HOME/cloudflared` 下下载/启动 `cloudflared`,并在隧道建立后打印公网地址。
+**`token` provider(默认;复用已有云端托管隧道):**
+1. 在 Cloudflare dashboard 建好隧道及其 Public Hostname 路由(`homedsh.example.com` -> `http://localhost:<端口>`)。
+2. 把该隧道的 run token(`cloudflared tunnel run --token ...`)配置到 `tunnelTokenRef`(`CLOUDFLARE_TUNNEL_TOKEN`)。
+3. 将 `domain` 设为该公网主机名。重启后插件在 `$DSH_HOME/cloudflared` 下载/启动 `cloudflared` 并连接已有隧道;无需 API token。
+
+**`api` provider(自动创建):** 设 `tunnelProvider: 'api'`,把 Cloudflare API token(Account/Cloudflare-Tunnel Edit + Zone/DNS Edit)配置到 `cloudflareApiTokenRef`,并设 `domain`。插件随后每次启动通过 API 建隧道与 DNS 并打印公网地址。
 
 ## 多机部署
 
