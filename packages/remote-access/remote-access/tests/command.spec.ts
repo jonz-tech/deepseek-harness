@@ -27,7 +27,7 @@ describe('token command', () => {
     const logged: string[] = []
     const { domain, store } = fakeDeps()
     const cmd = registerTokenCommand({ domain, now: () => 1000, log: m => logged.push(m) })
-    const result = await cmd.handler({ rawInput: 'create --name 家里', commandId: 'c' as never, agent: {} as never, signal: new AbortController().signal })
+    const result = await cmd.handler({ rawInput: 'create --name 家里', commandId: 'c' as never, agent: {} as never, attachments: [], signal: new AbortController().signal })
     expect(result.kind).toBe('success')
     const [rec] = store.values()
     expect(rec).toBeDefined()
@@ -39,9 +39,9 @@ describe('token command', () => {
   it('revokes by id', async () => {
     const { domain, store } = fakeDeps()
     const cmd = registerTokenCommand({ domain, now: () => 1000, log: () => {} })
-    await cmd.handler({ rawInput: 'create', commandId: 'c' as never, agent: {} as never, signal: new AbortController().signal })
+    await cmd.handler({ rawInput: 'create', commandId: 'c' as never, agent: {} as never, attachments: [], signal: new AbortController().signal })
     const id = [...store.keys()][0]!
-    const result = await cmd.handler({ rawInput: `revoke ${id}`, commandId: 'c' as never, agent: {} as never, signal: new AbortController().signal })
+    const result = await cmd.handler({ rawInput: `revoke ${id}`, commandId: 'c' as never, agent: {} as never, attachments: [], signal: new AbortController().signal })
     expect(result.kind).toBe('success')
     expect(store.get(id)!.revokedAt).toBe(1000)
   })
