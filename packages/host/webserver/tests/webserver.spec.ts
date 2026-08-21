@@ -248,6 +248,8 @@ describe('real Loader composition', () => {
     // 卸下闸门:恢复放行。
     ungate()
     expect(await request(port, '/secret')).toMatchObject({ status: 200, body: 'OK' })
+
+    await loaded.fiber.dispose()
   })
 
   it('destroys the socket when the request gate rejects an upgrade', { timeout: 60_000 }, async () => {
@@ -268,6 +270,26 @@ describe('real Loader composition', () => {
     // 闸门拦截 upgrade:不写 101,直接销毁 socket。
     server.setRequestGate(() => ({ allowed: false, status: 401 }))
     await upgradeRejected(port, '/events')
+
+    await loaded.fiber.dispose()
+  })
+
+  it('destroys the socket without a crash when the request gate throws synchronously', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const port = server.port
+    server.registerUpgrade({
+      path: '/events',
+      handler: (_req, socket) => {
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+      },
+    })
+
+    // 同步抛错的闸门:不写 101、直接销毁 socket,进程不崩溃。
+    server.setRequestGate(() => { throw new Error('test gate throws synchronously') })
+    await upgradeRejected(port, '/events')
+
+    await loaded.fiber.dispose()
   })
 
   it('fails the fiber when the port is already taken (fail-loud at activation)', { timeout: 60_000 }, async () => {
