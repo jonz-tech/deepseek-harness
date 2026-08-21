@@ -21,6 +21,8 @@ export interface LoginDeps {
   cookieName: string
   sessionTtlMs: number
   now: () => number
+  /** 异步写失败的告警回写(不阻塞登录响应,但不静默丢弃)。 */
+  warn: (message: string) => void
 }
 
 /** 从请求体读取 URL 编码的 `token` 字段。 */
@@ -67,15 +69,16 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
       const session = { sid: randomUUID(), issuedAt: now, expiresAt: now + deps.sessionTtlMs }
       const cookie = signSession(deps.secret, session)
       res.writeHead(302, {
-        'Set-Cookie': `${deps.cookieName}=${cookie}; HttpOnly; Path=/; Max-Age=${Math.floor(deps.sessionTtlMs / 1000)}`,
+        'Set-Cookie': `${deps.cookieName}=${cookie}; HttpOnly; Secure; Path=/; Max-Age=${Math.floor(deps.sessionTtlMs / 1000)}`,
         Location: '/',
       })
       res.end()
       // 访问日志 + 最后使用时间(异步落地,不阻塞响应)。
-      void tokens.update(matched.id, rec => ({ ...rec, lastUsedAt: now }))
-      void access.put(randomUUID(), {
+      tokens.update(matched.id, rec => ({ ...rec, lastUsedAt: now }))
+        .catch((error: unknown) => deps.warn(`remote-access: 更新 lastUsedAt 失败: ${String(error)}`))
+      access.put(randomUUID(), {
         tokenId: matched.id, at: now, ip: clientIp(req), userAgent: req.headers['user-agent'] ?? '',
-      } satisfies AccessRecord)
+      } satisfies AccessRecord).catch((error: unknown) => deps.warn(`remote-access: 写 access-log 失败: ${String(error)}`))
     },
   })
 
@@ -84,7 +87,7 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
     path: '/auth/logout',
     handler: (_req, res) => {
       res.writeHead(302, {
-        'Set-Cookie': `${deps.cookieName}=; HttpOnly; Path=/; Max-Age=0`,
+        'Set-Cookie': `${deps.cookieName}=; HttpOnly; Secure; Path=/; Max-Age=0`,
         Location: '/auth/login',
       })
       res.end()
