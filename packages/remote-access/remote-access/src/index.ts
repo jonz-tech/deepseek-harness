@@ -34,6 +34,8 @@ export interface Config {
   cloudflareApiTokenRef: string
   /** 总开关;false 时不注册任何路由/闸门/命令。 */
   enabled: boolean
+  /** 局域网直连免鉴权(私网来源且无 Cloudflare 隧道头时放行;隧道流量始终鉴权)。 */
+  lanBypass: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -44,6 +46,7 @@ export const Config: z<Config> = z.object({
   localPort: z.natural().max(65535).default(3080),
   cloudflareApiTokenRef: z.string().default('CLOUDFLARE_API_TOKEN'),
   enabled: z.boolean().default(true),
+  lanBypass: z.boolean().default(false),
 })
 
 /**
@@ -83,12 +86,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       lastUsedAt: null,
       revokedAt: null,
     })
-    ctx.logger.info('remote-access: 初始访问 token(仅显示一次): %s', initial)
+    // console.log 直打(与 web-app 的 `dsh web:` URL 行同通道):ctx.logger.info
+    // 在产品 CLI 下被过滤,明文钥匙打在不可见通道等于丢失。
+    console.log(`remote-access: 初始访问 token(仅显示一次): ${initial}`)
   }
 
   // 4. 注册闸门 + 登录路由 + /token 命令。
   ctx.effect(() => webServer.setRequestGate(createRequestGate({
-    secret, cookieName: config.cookieName, now: Date.now,
+    secret, cookieName: config.cookieName, now: Date.now, lanBypass: config.lanBypass,
     isRevoked: (tokenId, issuedAt) => {
       const rec = tokens.get(tokenId as TokenId)
       return rec !== undefined && rec.revokedAt !== null && rec.revokedAt > issuedAt
@@ -99,7 +104,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     warn: (message) => { ctx.logger.warn('%s', message) },
   }))
   ctx.effect(() => ctx.commands.register(registerTokenCommand({
-    domain, now: Date.now, log: (message) => { ctx.logger.info('%s', message) },
+    domain, now: Date.now, log: (message) => { console.log(message) },
   })))
 
   // 5. 隧道(可选):domain 非空且凭证存在时启动,释放时结束子进程。

@@ -137,6 +137,7 @@
         localPort: 3080
         cloudflareApiTokenRef: CLOUDFLARE_API_TOKEN
         enabled: true
+        lanBypass: true
 
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the

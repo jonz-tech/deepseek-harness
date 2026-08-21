@@ -26,8 +26,9 @@
 | `localPort` | `3080` | 隧道回源的本机 dsh 端口。 |
 | `cloudflareApiTokenRef` | `CLOUDFLARE_API_TOKEN` | Cloudflare API token 的 credential 引用名。 |
 | `enabled` | `true` | 总开关;为 `false` 时不注册任何路由/闸门/命令。 |
+| `lanBypass` | `false` | 局域网/本机直连免鉴权(来源为私网地址且无 Cloudflare 边缘头);隧道流量始终要求鉴权。 |
 
-web-app bundle 以一个月 `sessionTtlMs`、`cookieName: dsh_session`、`domain` 为空(仅鉴权;隧道按需开启)挂载本插件。
+web-app bundle 以一个月 `sessionTtlMs`、`cookieName: dsh_session`、`domain` 为空(仅鉴权;隧道按需开启)、`lanBypass: true`(局域网直连免鉴权)挂载本插件。
 
 ## 管理 token
 

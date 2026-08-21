@@ -26,8 +26,9 @@ The session secret is resolved through the `credentials` service under `sessionS
 | `localPort` | `3080` | Local dsh port the tunnel forwards to. |
 | `cloudflareApiTokenRef` | `CLOUDFLARE_API_TOKEN` | Credential reference for the Cloudflare API token. |
 | `enabled` | `true` | Master switch; `false` registers no routes, gate, or command. |
+| `lanBypass` | `false` | Skip auth for trusted direct LAN/loopback requests (private source and no Cloudflare edge headers); tunnel traffic always requires auth. |
 
-The web-app bundle mounts the plugin with a one-month `sessionTtlMs`, `cookieName: dsh_session`, and an empty `domain` (auth-only; tunnel opt-in).
+The web-app bundle mounts the plugin with a one-month `sessionTtlMs`, `cookieName: dsh_session`, an empty `domain` (auth-only; tunnel opt-in), and `lanBypass: true` (LAN direct access skips auth).
 
 ## Managing tokens
 

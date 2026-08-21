@@ -39,16 +39,18 @@ afterEach(async () => {
 })
 
 /**
- * Intercept the plugin's initial-token log line before the composition
+ * Intercept the plugin's initial-token console line before the composition
  * activates, capturing the minted plaintext token for the login assertion.
  */
-function captureInitialToken(ctx: Context): void {
-  const info = ctx.logger.info.bind(ctx.logger)
-  ctx.logger.info = ((...args: unknown[]) => {
-    if (typeof args[0] === 'string' && args[0].includes('初始访问 token')) {
-      mintedToken = String(args[1])
+function captureInitialToken(): void {
+  const originalLog = console.log.bind(console)
+  const line = '初始访问 token'
+  console.log = ((...args: unknown[]) => {
+    const first = args[0]
+    if (typeof first === 'string' && first.includes(line)) {
+      mintedToken = first.split(': ')[2]
     }
-    return (info as (...a: unknown[]) => unknown)(...args)
+    return (originalLog as (...a: unknown[]) => unknown)(...args)
   })
 }
 
@@ -105,7 +107,7 @@ async function loadComposition(): Promise<Context> {
     },
   } as unknown as NonNullable<typeof context.loader.internal>
 
-  captureInitialToken(context)
+  captureInitialToken()
   await context.loader.create({
     name: 'cordis:include',
     config: { path: pathToFileURL(configPath).href },

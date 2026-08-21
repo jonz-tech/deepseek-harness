@@ -25,6 +25,9 @@ export function registerTokenCommand(deps: TokenCommandDeps): CommandDefinition 
   return {
     name: 'token',
     description: '管理远程访问 token(create / list / revoke)',
+    // 声明 input 使 web 客户端按 leadingInput 认领带参数的调用;
+    // 无此声明时带参行会被当作普通消息发给模型。
+    input: { hint: 'create [名称] | list | revoke <id>' },
     recordInput: false,
     handler: async (invocation): Promise<CommandResult> => {
       const [verb, ...rest] = invocation.rawInput.trim().split(/\s+/)
