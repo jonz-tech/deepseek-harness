@@ -14,6 +14,8 @@ import { generateToken, hashToken } from './hash.ts'
 export interface TokenCommandDeps {
   domain: Domain<typeof remoteAccessDomain>
   now: () => number
+  /** 服务端日志回写(明文 token 走这里,绝不进会话日志)。 */
+  log: (message: string) => void
 }
 
 /** 注册 `/token` 命令。 */
@@ -24,7 +26,7 @@ export function registerTokenCommand(deps: TokenCommandDeps): CommandDefinition 
     name: 'token',
     description: '管理远程访问 token(create / list / revoke)',
     recordInput: false,
-    handler: (invocation): CommandResult | Promise<CommandResult> => {
+    handler: async (invocation): Promise<CommandResult> => {
       const [verb, ...rest] = invocation.rawInput.trim().split(/\s+/)
       switch (verb) {
         case 'create': {
@@ -38,9 +40,10 @@ export function registerTokenCommand(deps: TokenCommandDeps): CommandDefinition 
             lastUsedAt: null,
             revokedAt: null,
           }
+          deps.log(`remote-access: 新 token(仅显示这一次): ${plain}`)
           return tokens.put(id, record).then(() => ({
             kind: 'success' as const,
-            text: `token 已创建(仅显示这一次):\n${plain}\nid: ${id}\n名称: ${name}`,
+            text: `token 已创建(明文见服务端日志,仅显示一次)\nid: ${id}\n名称: ${name}`,
           }))
         }
         case 'list': {
@@ -51,9 +54,9 @@ export function registerTokenCommand(deps: TokenCommandDeps): CommandDefinition 
         case 'revoke': {
           const id = rest[0]
           if (id === undefined) return { kind: 'error', text: '用法: /token revoke <id>' }
-          return tokens.update(id as TokenId, rec => ({ ...rec, revokedAt: deps.now() }))
-            .then(() => ({ kind: 'success' as const, text: `已吊销 ${id}` }))
-            .catch(() => ({ kind: 'error' as const, text: `未找到 token ${id}` }))
+          if (tokens.get(id as TokenId) === undefined) return { kind: 'error', text: `未找到 token ${id}` }
+          await tokens.update(id as TokenId, rec => ({ ...rec, revokedAt: deps.now() }))
+          return { kind: 'success' as const, text: `已吊销 ${id}` }
         }
         default:
           return { kind: 'error', text: '用法: /token create --name X | /token list | /token revoke <id>' }

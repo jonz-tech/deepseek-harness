@@ -8,6 +8,7 @@ function fakeDeps() {
   const domain = {
     table: () => ({
       put: async (k: string, v: TokenRecord) => { store.set(k, v) },
+      get: (k: string) => store.get(k),
       entries: () => store.entries(),
       update: async (k: string, fn: (cur: TokenRecord) => TokenRecord) => {
         const cur = store.get(k)
@@ -22,20 +23,21 @@ function fakeDeps() {
 }
 
 describe('token command', () => {
-  it('creates a hashed token and prints the plaintext once', async () => {
+  it('creates a hashed token and logs the plaintext once', async () => {
+    const logged: string[] = []
     const { domain, store } = fakeDeps()
-    const cmd = registerTokenCommand({ domain, now: () => 1000 })
+    const cmd = registerTokenCommand({ domain, now: () => 1000, log: m => logged.push(m) })
     const result = await cmd.handler({ rawInput: 'create --name 家里', commandId: 'c' as never, agent: {} as never, signal: new AbortController().signal })
     expect(result.kind).toBe('success')
-    const plain = (result as { text: string }).text.split('\n')[1]
     const [rec] = store.values()
-    expect(rec.hash).not.toContain(plain)
-    expect(verifyToken(plain, rec.hash)).toBe(true)
+    expect(rec.hash).not.toContain(logged[0])
+    expect(verifyToken(logged[0].split(': ')[2]!, rec.hash)).toBe(true)
+    expect((result as { text: string }).text).not.toContain(logged[0])
   })
 
   it('revokes by id', async () => {
     const { domain, store } = fakeDeps()
-    const cmd = registerTokenCommand({ domain, now: () => 1000 })
+    const cmd = registerTokenCommand({ domain, now: () => 1000, log: () => {} })
     await cmd.handler({ rawInput: 'create', commandId: 'c' as never, agent: {} as never, signal: new AbortController().signal })
     const id = [...store.keys()][0]!
     const result = await cmd.handler({ rawInput: `revoke ${id}`, commandId: 'c' as never, agent: {} as never, signal: new AbortController().signal })
