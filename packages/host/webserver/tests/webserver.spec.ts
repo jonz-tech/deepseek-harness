@@ -61,10 +61,10 @@ async function loadComposition(port = 0): Promise<Context> {
   return context
 }
 
-/** GET (by default) one path against the running server; returns status plus a body prefix. */
-async function request(port: number, path: string, init?: RequestInit): Promise<{ status: number; body: string }> {
+/** GET (by default) one path against the running server; returns status, a body prefix, and the headers. */
+async function request(port: number, path: string, init?: RequestInit): Promise<{ status: number; body: string; headers: Headers }> {
   const response = await fetch(`http://127.0.0.1:${String(port)}${path}`, init)
-  return { status: response.status, body: (await response.text()).slice(0, 80) }
+  return { status: response.status, body: (await response.text()).slice(0, 80), headers: response.headers }
 }
 
 /** Open one raw upgrade request and return after the handler writes its response. */
@@ -83,6 +83,28 @@ async function upgrade(port: number, path: string): Promise<ReturnType<typeof co
   const [data] = await response as [Buffer]
   expect(String(data)).toContain('101 Switching Protocols')
   return socket
+}
+
+/** Open one raw upgrade request against a gated server; resolves once the socket closes without a 101. */
+async function upgradeRejected(port: number, path: string): Promise<void> {
+  const socket = connect(port, '127.0.0.1')
+  socket.on('error', () => { /* The server-side close is the fixture outcome. */ })
+  await once(socket, 'connect')
+  const closed = once(socket, 'close')
+  let sawUpgrade = false
+  socket.on('data', (data) => {
+    if (String(data).includes('101 Switching Protocols')) sawUpgrade = true
+  })
+  socket.write([
+    `GET ${path} HTTP/1.1`,
+    `Host: 127.0.0.1:${String(port)}`,
+    'Connection: Upgrade',
+    'Upgrade: dsh-test',
+    '',
+    '',
+  ].join('\r\n'))
+  await closed
+  expect(sawUpgrade).toBe(false)
 }
 
 describe('real Loader composition', () => {
@@ -198,6 +220,76 @@ describe('real Loader composition', () => {
     expect(upgradedServerClosed).toBe(true)
     upgraded.destroy()
     await expect(request(port, '/probe')).rejects.toThrow()
+  })
+
+  it('runs the request gate before HTTP and upgrade dispatch', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const port = server.port
+    server.register({ kind: 'exact', path: '/secret', handler: (_req, res) => { res.writeHead(200); res.end('OK') } })
+    server.register({ kind: 'exact', path: '/public', handler: (_req, res) => { res.writeHead(200); res.end('OK') } })
+
+    // 未设置闸门前:直接放行。
+    expect(await request(port, '/secret')).toMatchObject({ status: 200, body: 'OK' })
+
+    // 设置闸门:放行原样;拦截 /secret 返回 401;拦截页面重定向到 /auth/login。
+    const ungate = server.setRequestGate((req) => {
+      const path = new URL(req.url ?? '/', 'http://x').pathname
+      if (path === '/public') return { allowed: true }
+      if (path === '/secret') return { allowed: false, status: 401 }
+      return { allowed: false, location: '/auth/login' }
+    })
+    expect(await request(port, '/public')).toMatchObject({ status: 200, body: 'OK' })
+    expect((await request(port, '/secret')).status).toBe(401)
+    const redirect = await request(port, '/somewhere', { redirect: 'manual' })
+    expect(redirect.status).toBe(302)
+    expect(redirect.headers.get('location')).toBe('/auth/login')
+
+    // 卸下闸门:恢复放行。
+    ungate()
+    expect(await request(port, '/secret')).toMatchObject({ status: 200, body: 'OK' })
+
+    await loaded.fiber.dispose()
+  })
+
+  it('destroys the socket when the request gate rejects an upgrade', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const port = server.port
+    server.registerUpgrade({
+      path: '/events',
+      handler: (_req, socket) => {
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+      },
+    })
+
+    // 未设置闸门前:upgrade 正常协商 101。
+    const upgraded = await upgrade(port, '/events')
+    upgraded.destroy()
+
+    // 闸门拦截 upgrade:不写 101,直接销毁 socket。
+    server.setRequestGate(() => ({ allowed: false, status: 401 }))
+    await upgradeRejected(port, '/events')
+
+    await loaded.fiber.dispose()
+  })
+
+  it('destroys the socket without a crash when the request gate throws synchronously', { timeout: 60_000 }, async () => {
+    const loaded = await loadComposition()
+    const server = loaded.webServer
+    const port = server.port
+    server.registerUpgrade({
+      path: '/events',
+      handler: (_req, socket) => {
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: dsh-test\r\n\r\n')
+      },
+    })
+
+    // 同步抛错的闸门:不写 101、直接销毁 socket,进程不崩溃。
+    server.setRequestGate(() => { throw new Error('test gate throws synchronously') })
+    await upgradeRejected(port, '/events')
+
+    await loaded.fiber.dispose()
   })
 
   it('fails the fiber when the port is already taken (fail-loud at activation)', { timeout: 60_000 }, async () => {

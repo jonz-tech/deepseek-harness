@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
+  "include": ["src"],
+  "references": [
+    { "path": "../../util/brand" },
+    { "path": "../../util/home-paths" },
+    { "path": "../../host/webserver" },
+    { "path": "../../storage/storage-domain" },
+    { "path": "../../credentials/credentials" },
+    { "path": "../../interaction/commands" },
+    { "path": "../../runtime-diagnostics/invariants" }
+  ]
+}

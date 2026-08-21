@@ -125,6 +125,19 @@
         host: !!js ctx.webStartup.host ?? '127.0.0.1'
         port: !!js ctx.webStartup.port ?? 3080
 
+    # 远程访问:token 登录鉴权 + Cloudflare Tunnel 内网穿透(domain 为空则仅鉴权)。
+    # 会话密钥与 Cloudflare API token 由 credentials 解析,首次启动自生成初始 token。
+    - id: remote-access
+      name: '@deepseek-ai/dsh-remote-access'
+      config:
+        sessionTtlMs: 2592000000
+        cookieName: dsh_session
+        sessionSecretRef: REMOTE_ACCESS_SESSION_SECRET
+        domain: ''
+        localPort: 3080
+        cloudflareApiTokenRef: CLOUDFLARE_API_TOKEN
+        enabled: true
+
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the
     # frontend-static fallback owner, registers the web-surface prompt
