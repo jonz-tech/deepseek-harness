@@ -171,7 +171,7 @@ describe('real Loader composition: remote-access login gate', () => {
     expect(login.headers.get('location')).toBe('/')
     const setCookie = login.headers.get('set-cookie')
     expect(setCookie).toContain('HttpOnly')
-    expect(setCookie).toContain('Secure')
+    expect(setCookie).toContain('SameSite=Lax')
     const cookieValue = setCookie?.split(';')[0] ?? ''
 
     // 5. 会话 cookie 通过闸门:携带 cookie 的请求不再被重定向(无路由路径返回 404 而非 302)。

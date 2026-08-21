@@ -42,6 +42,7 @@ web-app bundle 以一个月 `sessionTtlMs`、`cookieName: dsh_session`、`domain
 1. 在 Cloudflare dashboard 建好隧道及其 Public Hostname 路由(`homedsh.example.com` -> `http://localhost:<端口>`)。
 2. 把该隧道的 run token(`cloudflared tunnel run --token ...`)配置到 `tunnelTokenRef`(`CLOUDFLARE_TUNNEL_TOKEN`)。
 3. 将 `domain` 设为该公网主机名。重启后插件在 `$DSH_HOME/cloudflared` 下载/启动 `cloudflared` 并连接已有隧道;无需 API token。
+4. **信任该公网主机名。** 浏览器信任围栏会对不在 `connection.trustedHosts` 里的主机 403 其 /api 调用,表现是登录成功又被弹回登录页。请在 profile 覆盖层扩展之,如 `trustedHosts: !!js "['homedsh.example.com', ...ctx.webRuntime.trustedHosts]"`(用引号把 JS 表达式包成标量:覆盖层 `!!js` 只接受标量)。
 
 **`api` provider(自动创建):** 设 `tunnelProvider: 'api'`,把 Cloudflare API token(Account/Cloudflare-Tunnel Edit + Zone/DNS Edit)配置到 `cloudflareApiTokenRef`,并设 `domain`。插件随后每次启动通过 API 建隧道与 DNS 并打印公网地址。
 
@@ -52,7 +53,7 @@ web-app bundle 以一个月 `sessionTtlMs`、`cookieName: dsh_session`、`domain
 ## 安全模型
 
 - token 仅以 scrypt 哈希(`salt:hash`)存储;明文只在创建时一次性出现在服务端日志,从不落盘。
-- 会话 cookie 使用解析到的密钥做 HMAC-SHA256 签名,携带 `HttpOnly; Secure`,并在 `sessionTtlMs` 后过期。
+- 会话 cookie 使用解析到的密钥做 HMAC-SHA256 签名,携带 `HttpOnly; SameSite=Lax`,并在 `sessionTtlMs` 后过期。有意省略 `Secure`:经 Cloudflare 隧道时连接本就是端到端 HTTPS,而 `Secure` 标志会导致部分手机浏览器登录后丢失 cookie。
 - 闸门用常数时间的 `timingSafeEqual` 比较签名。
 - 吊销是软删除:记录保留哈希与历史,但 `revokedAt` 一旦设置,token 即不再具备鉴权能力。
 

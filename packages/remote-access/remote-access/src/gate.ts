@@ -63,7 +63,12 @@ export function createRequestGate(deps: GateDeps): RequestGate {
       return { allowed: true }
     }
     const isUpgrade = (req.headers.upgrade ?? '').length > 0
-    if (path.startsWith('/api/') || isUpgrade) return { allowed: false, status: 401 }
+    if (path.startsWith('/api/') || isUpgrade) {
+      // 诊断:API/upgrade 被拦,记是否有 cookie。
+      console.log(`remote-access: 拦截 API/WS path=${path} hasCookie=${cookie !== undefined} ip=${req.socket.remoteAddress}`)
+      return { allowed: false, status: 401 }
+    }
+    console.log(`remote-access: 拦截页面 path=${path} hasCookie=${cookie !== undefined} ip=${req.socket.remoteAddress}`)
     return { allowed: false, location: '/auth/login' }
   }
 }

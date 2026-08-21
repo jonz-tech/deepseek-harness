@@ -79,12 +79,17 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
         if (record.revokedAt !== null) continue
         if (verifyToken(plain, record.hash)) { matched = { id, record }; break }
       }
-      if (matched === undefined) { res.writeHead(401); res.end('unauthorized'); return }
+      if (matched === undefined) {
+        // 诊断:登录失败(明文不落日志,只记 IP/UA/长度)。
+        console.log(`remote-access: 登录失败 token_len=${plain.length} ip=${clientIp(req)} ua=${(req.headers['user-agent'] ?? '').slice(0, 60)}`)
+        res.writeHead(401); res.end('unauthorized'); return
+      }
       const now = deps.now()
+      console.log(`remote-access: 登录成功 token=${matched.record.name} ip=${clientIp(req)}`)
       const session = { sid: randomUUID(), tokenId: matched.id, issuedAt: now, expiresAt: now + deps.sessionTtlMs }
       const cookie = signSession(deps.secret, session)
       res.writeHead(302, {
-        'Set-Cookie': `${deps.cookieName}=${cookie}; HttpOnly; Secure; Path=/; Max-Age=${Math.floor(deps.sessionTtlMs / 1000)}`,
+        'Set-Cookie': `${deps.cookieName}=${cookie}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(deps.sessionTtlMs / 1000)}`,
         Location: '/',
       })
       res.end()
@@ -103,7 +108,7 @@ export function registerLoginRoutes(webServer: WebServer, deps: LoginDeps): () =
     path: '/auth/logout',
     handler: (_req, res) => {
       res.writeHead(302, {
-        'Set-Cookie': `${deps.cookieName}=; HttpOnly; Secure; Path=/; Max-Age=0`,
+        'Set-Cookie': `${deps.cookieName}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
         Location: '/auth/login',
       })
       res.end()

@@ -42,6 +42,7 @@ The web-app bundle mounts the plugin with a one-month `sessionTtlMs`, `cookieNam
 1. Create a tunnel and its Public Hostname route in the Cloudflare dashboard (`homedsh.example.com` -> `http://localhost:<port>`).
 2. Set the tunnel's run token (`cloudflared tunnel run --token ...`) under `tunnelTokenRef` (`CLOUDFLARE_TUNNEL_TOKEN`).
 3. Set `domain` to that public hostname. Restart: the plugin downloads/launches `cloudflared` under `$DSH_HOME/cloudflared` and connects the existing tunnel; no API token needed.
+4. **Trust the public hostname.** The browser-trust fence 403s API calls from hosts outside `connection.trustedHosts`, which would log you in then bounce back to the login page. In the profile overlay, extend it, e.g. `trustedHosts: !!js "['homedsh.example.com', ...ctx.webRuntime.trustedHosts]"` (quote the JS expression: the overlay's `!!js` tag accepts scalars only).
 
 **`api` provider (auto-create):** set `tunnelProvider: 'api'`, put a Cloudflare API token (Account/Cloudflare-Tunnel Edit + Zone/DNS Edit) under `cloudflareApiTokenRef`, and set `domain`. The plugin then creates the tunnel and DNS via the API on each boot and logs the public URL.
 
@@ -52,7 +53,7 @@ The web-app bundle mounts the plugin with a one-month `sessionTtlMs`, `cookieNam
 ## Security model
 
 - Tokens are stored only as scrypt hashes (`salt:hash`); plaintext appears once in the server log at creation and is never persisted.
-- Session cookies are HMAC-SHA256-signed with the resolved secret and carry `HttpOnly; Secure`, expiring at `sessionTtlMs`.
+- Session cookies are HMAC-SHA256-signed with the resolved secret and carry `HttpOnly; SameSite=Lax`, expiring at `sessionTtlMs`. `Secure` is intentionally omitted: over a Cloudflare tunnel the connection is HTTPS end-to-end, and the `Secure` flag caused some mobile browsers to drop the cookie after login.
 - The gate compares signatures with a constant-time `timingSafeEqual`.
 - Revoke is a soft-delete: the record keeps its hash and history, but `revokedAt` is set so the token no longer authenticates.
 
