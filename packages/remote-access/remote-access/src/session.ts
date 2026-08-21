@@ -4,6 +4,7 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import type { IncomingMessage } from 'node:http'
 
 /** 会话载荷。 */
 export interface Session {
@@ -39,4 +40,17 @@ export function verifySession(secret: string, cookie: string): Session | undefin
 /** 会话是否已过期(或恰好到期)。 */
 export function sessionExpired(session: Session, now: number): boolean {
   return session.expiresAt <= now
+}
+
+/** 从 `Cookie` 头解析指定名字的 cookie 值;不存在返回 undefined。 */
+export function readCookie(req: IncomingMessage, name: string): string | undefined {
+  const header = req.headers.cookie
+  if (header === undefined) return undefined
+  for (const pair of header.split(';')) {
+    const eq = pair.indexOf('=')
+    if (eq === -1) continue
+    const key = pair.slice(0, eq).trim()
+    if (key === name) return pair.slice(eq + 1).trim()
+  }
+  return undefined
 }
